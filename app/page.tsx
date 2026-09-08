@@ -10,10 +10,15 @@ interface Word {
 
 export default function Home() {
   const [words, setWords] = useState<Word[]>([]);
+  const [filteredWords, setFilteredWords] = useState<Word[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [typedWord, setTypedWord] = useState('');
   const [savedWord, setSavedWord] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -42,14 +47,27 @@ export default function Home() {
       recognitionRef.current = recognition;
     }
 
-    // Fetch words on mount
     fetchWords();
   }, []);
+
+  // Filter words based on search query
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredWords(words);
+    } else {
+      setFilteredWords(
+        words.filter((word) =>
+          word.word.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      );
+    }
+  }, [words, searchQuery]);
 
   const startListening = () => {
     if (recognitionRef.current) {
       setTranscript('');
       setSavedWord('');
+      setTypedWord('');
       recognitionRef.current.start();
     }
   };
@@ -67,9 +85,10 @@ export default function Home() {
       if (res.ok) {
         setSavedWord(word.trim());
         setTranscript('');
+        setTypedWord('');
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 3000);
         fetchWords();
-      } else {
-        console.error('Failed to save word');
       }
     } catch (err) {
       console.error('Error saving word:', err);
@@ -90,9 +109,15 @@ export default function Home() {
 
   const deleteWord = async (id: string) => {
     try {
-      const res = await fetch(`/api/words?id=${id}`, { method: 'DELETE' });
+      const res = await fetch('/api/words', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
       if (res.ok) {
         fetchWords();
+      } else {
+        console.error('Failed to delete word');
       }
     } catch (err) {
       console.error('Error deleting word:', err);
@@ -100,73 +125,189 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-4xl font-bold text-gray-800 mb-8">English Learning App</h1>
+    <div className="min-h-screen bg-black">
+      {/* Header */}
+      <header className="border-b border-gray-900 sticky top-0 z-50 bg-black/80 backdrop-blur-md">
+        <div className="max-w-5xl mx-auto px-6 py-5 sm:px-8">
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Word Whisper</h1>
+        </div>
+      </header>
 
-        {/* Mic Section */}
-        <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <button
-            onClick={startListening}
-            disabled={isListening}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-bold py-4 px-6 rounded-lg mb-4 transition"
-          >
-            {isListening ? '🎤 Listening...' : '🎤 Click to say a word'}
-          </button>
+      {/* Main Content */}
+      <main className="max-w-5xl mx-auto px-6 py-16 sm:px-8 sm:py-24">
+        
+        {/* Hero Section */}
+        <section className="mb-20 sm:mb-32">
+          <div className="max-w-2xl mb-12">
+            <h2 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white mb-6 leading-tight">
+              Master english vocabulary
+            </h2>
+            <p className="text-lg text-gray-300 font-light leading-relaxed">
+              Say or type a word while reading, and build your personal vocabulary list with ease.
+            </p>
+          </div>
 
-          {transcript && (
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-2">You said:</p>
-              <div className="bg-gray-100 p-4 rounded-lg mb-4">
-                <p className="text-lg font-semibold text-gray-800">{transcript}</p>
-              </div>
+          {/* Capture Card */}
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 sm:p-12 space-y-8">
+            
+            {/* Mic Button */}
+            <div>
               <button
-                onClick={() => saveWord(transcript)}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition"
+                onClick={startListening}
+                disabled={isListening}
+                className="w-full group relative overflow-hidden rounded-full bg-white text-black font-semibold py-5 sm:py-6 px-8 transition-all duration-300 hover:bg-gray-100 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
               >
-                ✓ Save this word
+                <div className="flex items-center justify-center gap-3">
+                  {/* Mic Icon */}
+                  <span className={`text-xl transition-all ${isListening ? 'animate-pulse' : ''}`}>
+                    🎤
+                  </span>
+                  <span>{isListening ? 'Listening...' : 'Tap to speak'}</span>
+                </div>
               </button>
             </div>
-          )}
 
-          {savedWord && (
-            <div className="bg-green-50 border-l-4 border-green-600 p-4">
-              <p className="text-green-800">✓ Saved: <span className="font-bold">{savedWord}</span></p>
+            {/* Divider */}
+            <div className="flex items-center gap-4">
+              <div className="flex-1 h-px bg-gray-800"></div>
+              <p className="text-sm text-gray-500 font-light">or</p>
+              <div className="flex-1 h-px bg-gray-800"></div>
             </div>
-          )}
-        </div>
 
-        {/* Words List Section */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Words ({words.length})</h2>
+            {/* Text Input */}
+            <div className="flex gap-3">
+              <input
+                ref={inputRef}
+                type="text"
+                value={typedWord}
+                onChange={(e) => setTypedWord(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && saveWord(typedWord)}
+                placeholder="Type a word..."
+                className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-5 py-4 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-0 focus:border-transparent transition-all"
+              />
+              <button
+                onClick={() => saveWord(typedWord)}
+                className="bg-white text-black font-semibold px-8 py-4 rounded-lg hover:bg-gray-100 active:scale-95 transition-all duration-200 shadow-lg"
+              >
+                Save
+              </button>
+            </div>
 
-          {words.length === 0 ? (
-            <p className="text-gray-600 text-center py-8">No words yet. Start capturing!</p>
+            {/* Transcript Display */}
+            {transcript && (
+              <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
+                  <p className="text-sm text-gray-400 font-medium mb-3">You said</p>
+                  <p className="text-2xl font-semibold text-white mb-4">{transcript}</p>
+                  <button
+                    onClick={() => saveWord(transcript)}
+                    className="w-full bg-white text-black font-semibold py-3 rounded-lg hover:bg-gray-100 active:scale-95 transition-all duration-200 shadow-lg"
+                  >
+                    Save this word
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {showSuccess && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="bg-green-950 border border-green-800 rounded-lg p-4 flex items-center gap-3">
+                  <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <p className="text-sm font-medium text-green-300">
+                    Saved: <span className="font-semibold">{savedWord}</span>
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Words Section */}
+        <section>
+          <div className="flex items-baseline justify-between mb-8">
+            <h3 className="text-3xl font-semibold text-white">Your words</h3>
+            <p className="text-sm text-gray-400 font-light">{filteredWords.length} of {words.length}</p>
+          </div>
+
+          {/* Search Bar */}
+          <div className="mb-8">
+            <div className="relative">
+              <svg className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search words..."
+                className="w-full bg-gray-950 border border-gray-800 rounded-lg pl-12 pr-5 py-3 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {filteredWords.length === 0 && words.length === 0 ? (
+            <div className="text-center py-16 sm:py-24">
+              <p className="text-lg text-gray-400 font-light">No words yet</p>
+              <p className="text-sm text-gray-500 font-light mt-2">Start by capturing your first word</p>
+            </div>
+          ) : filteredWords.length === 0 ? (
+            <div className="text-center py-16 sm:py-24">
+              <p className="text-lg text-gray-400 font-light">No words match your search</p>
+              <p className="text-sm text-gray-500 font-light mt-2">Try a different search term</p>
+            </div>
           ) : (
-            <div className="space-y-2">
-              {words.map((word) => (
+            <div className="grid gap-3 sm:gap-4">
+              {filteredWords.map((word, index) => (
                 <div
                   key={word.id}
-                  className="flex justify-between items-center bg-gray-50 p-4 rounded-lg hover:bg-gray-100 transition"
+                  className="group flex items-center justify-between bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-xl px-6 py-4 transition-all duration-200 animate-in fade-in slide-in-from-bottom-2"
+                  style={{ animationDelay: `${index * 30}ms` }}
                 >
-                  <div>
-                    <p className="font-semibold text-gray-800">{word.word}</p>
-                    <p className="text-sm text-gray-500">
-                      {new Date(word.created_at).toLocaleDateString()}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-base font-medium text-white">{word.word}</p>
+                      {word.translation && (
+                        <p className="text-sm font-light text-gray-400">
+                          • {word.translation}
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 font-light mt-2">
+                      {new Date(word.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: new Date(word.created_at).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+                      })}
                     </p>
                   </div>
                   <button
                     onClick={() => deleteWord(word.id)}
-                    className="text-red-600 hover:text-red-800 font-bold"
+                    className="ml-4 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all duration-200 p-2 rounded-lg hover:bg-gray-800 active:scale-90"
+                    aria-label="Delete word"
                   >
-                    ✕
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
                   </button>
                 </div>
               ))}
             </div>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 }
