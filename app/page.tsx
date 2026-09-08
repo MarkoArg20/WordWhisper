@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 interface Word {
   id: string;
   word: string;
+  translation: string;
   created_at: string;
+  note?: string;
 }
 
 export default function Home() {
@@ -17,6 +19,8 @@ export default function Home() {
   const [savedWord, setSavedWord] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedWord, setSelectedWord] = useState<Word | null>(null);
+  const [noteText, setNoteText] = useState('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -72,6 +76,10 @@ export default function Home() {
     }
   };
 
+  const cancelTranscript = () => {
+    setTranscript('');
+  };
+
   const saveWord = async (word: string) => {
     if (!word.trim()) return;
 
@@ -124,6 +132,35 @@ export default function Home() {
     }
   };
 
+  const openNoteDialog = (word: Word) => {
+    setSelectedWord(word);
+    setNoteText(word.note || '');
+  };
+
+  const closeNoteDialog = () => {
+    setSelectedWord(null);
+    setNoteText('');
+  };
+
+  const saveNote = async () => {
+    if (!selectedWord) return;
+
+    try {
+      const res = await fetch('/api/words/note', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedWord.id, note: noteText }),
+      });
+
+      if (res.ok) {
+        fetchWords();
+        closeNoteDialog();
+      }
+    } catch (err) {
+      console.error('Error saving note:', err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black">
       {/* Header */}
@@ -158,7 +195,6 @@ export default function Home() {
                 className="w-full group relative overflow-hidden rounded-full bg-white text-black font-semibold py-5 sm:py-6 px-8 transition-all duration-300 hover:bg-gray-100 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
               >
                 <div className="flex items-center justify-center gap-3">
-                  {/* Mic Icon */}
                   <span className={`text-xl transition-all ${isListening ? 'animate-pulse' : ''}`}>
                     🎤
                   </span>
@@ -196,7 +232,16 @@ export default function Home() {
             {/* Transcript Display */}
             {transcript && (
               <div className="animate-in fade-in slide-in-from-top-4 duration-300">
-                <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
+                <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 relative">
+                  <button
+                    onClick={cancelTranscript}
+                    className="absolute top-4 right-4 text-gray-500 hover:text-red-400 transition-colors p-1"
+                    aria-label="Cancel"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
                   <p className="text-sm text-gray-400 font-medium mb-3">You said</p>
                   <p className="text-2xl font-semibold text-white mb-4">{transcript}</p>
                   <button
@@ -273,19 +318,27 @@ export default function Home() {
               {filteredWords.map((word, index) => (
                 <div
                   key={word.id}
-                  className="group flex items-center justify-between bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-xl px-6 py-4 transition-all duration-200 animate-in fade-in slide-in-from-bottom-2"
+                  className="group flex items-center justify-between bg-gray-950 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-xl px-6 py-6 transition-all duration-200 animate-in fade-in slide-in-from-bottom-2"
                   style={{ animationDelay: `${index * 30}ms` }}
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-base font-medium text-white">{word.word}</p>
+                  <div
+                    className="min-w-0 flex-1 cursor-pointer"
+                    onClick={() => openNoteDialog(word)}
+                  >
+                    <div className="flex items-center gap-3 flex-wrap mb-3">
+                      <p className="text-xl font-semibold text-white">{word.word}</p>
                       {word.translation && (
-                        <p className="text-sm font-light text-gray-400">
+                        <p className="text-lg font-light text-gray-300">
                           • {word.translation}
                         </p>
                       )}
                     </div>
-                    <p className="text-sm text-gray-500 font-light mt-2">
+                    {word.note && (
+                      <p className="text-sm text-gray-400 italic truncate">
+                        Note: {word.note}
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-500 font-light mt-3">
                       {new Date(word.created_at).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -295,7 +348,7 @@ export default function Home() {
                   </div>
                   <button
                     onClick={() => deleteWord(word.id)}
-                    className="ml-4 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all duration-200 p-2 rounded-lg hover:bg-gray-800 active:scale-90"
+                    className="ml-4 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all duration-200 p-2 rounded-lg hover:bg-gray-800 active:scale-90 flex-shrink-0"
                     aria-label="Delete word"
                   >
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -308,6 +361,45 @@ export default function Home() {
           )}
         </section>
       </main>
+
+      {/* Note Dialog */}
+      {selectedWord && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-md w-full shadow-xl">
+            <h3 className="text-xl font-semibold text-white mb-2">
+              {selectedWord.word}
+            </h3>
+            <p className="text-sm text-gray-400 mb-6">
+              {selectedWord.translation}
+            </p>
+
+            <label className="block text-sm font-medium text-gray-300 mb-3">
+              Add a note
+            </label>
+            <textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              placeholder="Write a note about this word..."
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent resize-none h-32 transition-all"
+            />
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={closeNoteDialog}
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveNote}
+                className="flex-1 bg-white hover:bg-gray-100 text-black font-semibold py-2 px-4 rounded-lg transition-all duration-200"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
